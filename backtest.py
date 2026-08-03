@@ -35,8 +35,7 @@ def run_holdout_backtest(data, wacc=0.09):
     
     return {
         "eligible": True,
-        "train_years": f"{train_fin.columns[0].strftime('%Y')} - {train_fin.columns[-1].strftime('%Y')}",
-        "tested_year": financials.columns[-1].strftime("%Y"),
+        "train_years": f"{pd.to_datetime(train_fin.columns[0]).strftime('%Y')} - {pd.to_datetime(train_fin.columns[-1]).strftime('%Y')}",        "tested_year": financials.columns[-1].strftime("%Y"),
         "predicted_p10_rev": p10_rev,
         "predicted_p90_rev": p90_rev,
         "actual_rev": actual_rev,

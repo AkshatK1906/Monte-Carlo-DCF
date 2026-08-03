@@ -21,7 +21,7 @@ discount_rate = st.sidebar.slider("Base WACC (%)", min_value=5.0, max_value=15.0
 
 run_button = st.sidebar.button("Run Stochastic DCF", type="primary")
 
-# Run simulation when button clicked OR on first load
+# Run simulation
 if run_button or "data" not in st.session_state:
     with st.spinner("Fetching financial statements & running 10,000 simulations..."):
         try:
@@ -47,6 +47,10 @@ if "data" in st.session_state and "sim_res" in st.session_state:
         st.warning(f"⚠️ {data['message']}")
     else:
         sim = st.session_state["sim_res"]
+        
+        # Display Fallback Banner if API was rate-limited
+        if data.get("is_fallback", False):
+            st.warning(f"ℹ️ **Demo Mode Active:** Yahoo Finance rate-limited Streamlit Cloud's public IP. Loaded benchmark financial data for **{data['ticker']}** so you can run simulations and test features seamlessly.")
         
         # TAB 1: VALUATION ENGINE
         with tab1:

@@ -1,6 +1,5 @@
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 import pandas as pd
 
 from data_fetcher import fetch_company_data
@@ -8,11 +7,10 @@ from monte_carlo import run_monte_carlo_dcf
 from backtest import run_holdout_backtest
 from database import init_db, save_run, get_history
 
-# Page Config
-st.set_page_config(page_title="Stochastic DCF Engine", layout="wide")
+st.set_page_config(page_title="Probabilistic DCF Engine", layout="wide")
 init_db()
 
-st.title("📊 Stochastic DCF Valuation Engine")
+st.title("📊 Probabilistic DCF Valuation Engine")
 st.caption("Correlated Monte Carlo simulation for intrinsic equity valuation & risk analysis.")
 
 # --- SIDEBAR INPUTS ---
@@ -23,6 +21,7 @@ discount_rate = st.sidebar.slider("Base WACC (%)", min_value=5.0, max_value=15.0
 
 run_button = st.sidebar.button("Run Stochastic DCF", type="primary")
 
+# Run simulation when button clicked OR on first load
 if run_button or "data" not in st.session_state:
     with st.spinner("Fetching financial statements & running 10,000 simulations..."):
         try:
@@ -31,7 +30,6 @@ if run_button or "data" not in st.session_state:
             if not data["unsupported"]:
                 sim_res = run_monte_carlo_dcf(data, scenario=scenario, wacc=discount_rate)
                 st.session_state["sim_res"] = sim_res
-                # Save to database
                 save_run(
                     ticker_input, data["current_price"], sim_res["median"],
                     sim_res["p10"], sim_res["p90"], scenario
@@ -42,10 +40,10 @@ if run_button or "data" not in st.session_state:
 # --- MAIN DASHBOARD TABS ---
 tab1, tab2, tab3 = st.tabs(["🚀 Valuation Engine", "📜 Financial History", "📈 Valuation Tracker"])
 
-if "data" in st.session_state:
+if "data" in st.session_state and "sim_res" in st.session_state:
     data = st.session_state["data"]
     
-    if data["unsupported"]:
+    if data.get("unsupported", False):
         st.warning(f"⚠️ {data['message']}")
     else:
         sim = st.session_state["sim_res"]
@@ -54,7 +52,6 @@ if "data" in st.session_state:
         with tab1:
             st.subheader(f"{data['company_name']} ({data['ticker']}) - Intrinsic Value Distribution")
             
-            # Key Metric Cards
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Current Market Price", f"${data['current_price']:.2f}")
             c2.metric("Simulated Median Value", f"${sim['median']:.2f}", 
@@ -64,7 +61,6 @@ if "data" in st.session_state:
             
             st.info(f"📍 **Market Price Percentile:** Current price sits at the **{sim['price_percentile']:.1f}th percentile** of simulated fair values.")
             
-            # Histogram Plot
             fig = px.histogram(
                 sim["sim_prices"], nbins=60, 
                 title="10,000 Simulated Fair Value Prices ($)",
@@ -76,7 +72,6 @@ if "data" in st.session_state:
             fig.update_layout(showlegend=False, yaxis_title="Frequency")
             st.plotly_chart(fig, use_container_width=True)
             
-            # Tornado Sensitivity Chart
             st.subheader("Sensitivity Analysis (Tornado Chart)")
             tornado_df = pd.DataFrame(list(sim["tornado"].items()), columns=["Driver", "Impact Price ($)"])
             fig_torn = px.bar(
@@ -86,7 +81,6 @@ if "data" in st.session_state:
             )
             st.plotly_chart(fig_torn, use_container_width=True)
             
-            # Phase 4: Holdout Backtest Card
             st.subheader("🧪 1-Year Holdout Backtest Validation")
             bt = run_holdout_backtest(data, wacc=discount_rate)
             if bt["eligible"]:
@@ -104,12 +98,11 @@ if "data" in st.session_state:
             else:
                 st.caption("Insufficient historical years to perform holdout validation.")
 
-            # Methodology Note
             with st.expander("📚 Methodology & Limitations"):
                 st.markdown("""
-                - **Randomization & Correlation:** Uses Cholesky Decomposition to ensure revenue growth, EBIT margins, and exit multiples move together realistically based on business leverage.
-                - **Fixed Inputs:** CAPM WACC is held fixed as a baseline assumption for clear traceability.
-                - **Data Constraints:** Uses annual financial statements to maximize historical data reliability.
+                - **Randomization & Correlation:** Uses Cholesky Decomposition to ensure revenue growth, EBIT margins, and exit multiples move together realistically.
+                - **Fixed Inputs:** WACC is held fixed for clear traceability.
+                - **Data Constraints:** Uses annual financial statements to maximize historical reliability.
                 """)
 
         # TAB 2: FINANCIAL HISTORY
@@ -123,8 +116,6 @@ if "data" in st.session_state:
             history_df = get_history(data["ticker"])
             if not history_df.empty:
                 st.dataframe(history_df, use_container_width=True)
-                
-                # Line plot of valuations over time
                 fig_hist = px.line(
                     history_df, x="timestamp", y=["median_val", "current_price"],
                     labels={"value": "Price ($)", "timestamp": "Run Date"},

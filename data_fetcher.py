@@ -1,11 +1,12 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 UNSUPPORTED_SECTORS = ["Financial Services", "Real Estate"]
 
+@st.cache_data(ttl=3600)  # Caches yfinance data for 1 hour to prevent rate limiting!
 def fetch_company_data(ticker_symbol):
-    """Pulls annual financial statements, sector info, and market data via yfinance."""
     ticker = yf.Ticker(ticker_symbol)
     info = ticker.info
     
@@ -25,26 +26,21 @@ def fetch_company_data(ticker_symbol):
     if financials.empty or balance_sheet.empty:
         raise ValueError(f"Could not retrieve complete financial statements for '{ticker_symbol}'. Check ticker symbol.")
     
-    # Sort columns chronologically (oldest to newest)
     financials = financials.iloc[:, ::-1]
     balance_sheet = balance_sheet.iloc[:, ::-1]
     
-    # Extract Key Historical Items
     rev = financials.loc["Total Revenue"] if "Total Revenue" in financials.index else financials.loc["Revenue"]
     ebit = financials.loc["EBIT"] if "EBIT" in financials.index else financials.loc["Operating Income"]
     
-    # Historical Ratios
     rev_growth = rev.pct_change().dropna()
     margins = (ebit / rev).dropna()
     
-    # Default Fallbacks if insufficient historical variance
     rev_mean = float(rev_growth.mean()) if len(rev_growth) > 0 else 0.05
     rev_std = float(rev_growth.std()) if len(rev_growth) > 1 and not np.isnan(rev_growth.std()) else 0.03
     
     margin_mean = float(margins.mean()) if len(margins) > 0 else 0.15
     margin_std = float(margins.std()) if len(margins) > 1 and not np.isnan(margins.std()) else 0.02
     
-    # Capital Structure & Shares
     current_price = info.get("currentPrice") or info.get("regularMarketPrice") or float(rev.iloc[-1] / 100)
     shares_out = info.get("sharesOutstanding") or 1_000_000
     
@@ -52,7 +48,6 @@ def fetch_company_data(ticker_symbol):
     cash = float(balance_sheet.loc["Cash And Cash Equivalents"].iloc[-1]) if "Cash And Cash Equivalents" in balance_sheet.index else 0.0
     net_debt = total_debt - cash
     
-    # Peer / Industry Exit Multiple Fallback
     peer_multiple = info.get("enterpriseToEbitda") or 10.0
     if peer_multiple <= 0 or np.isnan(peer_multiple):
         peer_multiple = 10.0

@@ -1,5 +1,12 @@
 import numpy as np
+import pandas as pd
 
+def get_year_str(val):
+    try:
+        return pd.to_datetime(val).strftime('%Y')
+    except Exception:
+        return str(val)[:4]
+        
 def run_holdout_backtest(data, wacc=0.09):
     """
     Validates model accuracy by training on earlier historical data (Years 1 to N-1),
